@@ -12,9 +12,11 @@ from .const import (
     BUS_STATUS_EARLY,
     BUS_STATUS_LATE,
     CONF_DEPARTURE_REMINDER,
-    CONF_DEPARTURE_STOP_NAME,
     CONF_EARLY_THRESHOLD,
     CONF_LATE_THRESHOLD,
+    CONF_STOP_ID,
+    CONF_STOP_NAME,
+    CONF_STOPS,
     CONF_TIME_TO_GET_THERE,
     DOMAIN,
 )
@@ -36,8 +38,8 @@ class TasTransitNotificationService:
         self.hass = hass
         self.coordinator = coordinator
         self.config_entry = config_entry
-        self._last_bus_status = None
-        self._last_departure_reminder = None
+        self._last_bus_status = {}  # Track status per stop
+        self._last_departure_reminder = {}  # Track reminders per stop
         self._unsub_timer = None
 
     async def async_setup(self) -> None:
@@ -61,45 +63,53 @@ class TasTransitNotificationService:
         if not self.coordinator.data:
             return
 
-        await self._check_bus_status_notifications()
-        await self._check_departure_reminder_notifications()
+        # Check notifications for each stop
+        for stop_config in self.config_entry.data[CONF_STOPS]:
+            stop_id = stop_config[CONF_STOP_ID]
+            stop_data = self.coordinator.data.get(stop_id)
+            
+            if stop_data:
+                await self._check_bus_status_notifications(stop_id, stop_config, stop_data)
+                await self._check_departure_reminder_notifications(stop_id, stop_config, stop_data)
 
-    async def _check_bus_status_notifications(self) -> None:
+    async def _check_bus_status_notifications(self, stop_id: str, stop_config: dict, stop_data: dict) -> None:
         """Check for bus status change notifications."""
-        current_status = self.coordinator.data.get("bus_status")
+        current_status = stop_data.get("bus_status")
+        last_status = self._last_bus_status.get(stop_id)
         
-        if current_status != self._last_bus_status:
+        if current_status != last_status:
             # Status changed, send notification if needed
             if current_status in [BUS_STATUS_EARLY, BUS_STATUS_LATE]:
-                await self._send_bus_status_notification(current_status)
+                await self._send_bus_status_notification(stop_config, current_status)
             
-            self._last_bus_status = current_status
+            self._last_bus_status[stop_id] = current_status
 
-    async def _check_departure_reminder_notifications(self) -> None:
+    async def _check_departure_reminder_notifications(self, stop_id: str, stop_config: dict, stop_data: dict) -> None:
         """Check for departure reminder notifications."""
-        time_to_departure = self.coordinator.data.get("time_to_departure")
+        time_to_departure = stop_data.get("time_to_departure")
         
         if time_to_departure is None:
             return
         
-        time_to_get_there = self.config_entry.data[CONF_TIME_TO_GET_THERE]
-        departure_reminder = self.config_entry.data[CONF_DEPARTURE_REMINDER]
+        time_to_get_there = stop_config[CONF_TIME_TO_GET_THERE]
+        departure_reminder = stop_config[CONF_DEPARTURE_REMINDER]
         
         # Calculate when to send the reminder
         reminder_time = time_to_departure - time_to_get_there
         
         # Send reminder if it's time and we haven't sent it yet
+        last_reminder = self._last_departure_reminder.get(stop_id)
         if (
             reminder_time <= departure_reminder
             and reminder_time > 0
-            and self._last_departure_reminder != time_to_departure
+            and last_reminder != time_to_departure
         ):
-            await self._send_departure_reminder_notification(reminder_time)
-            self._last_departure_reminder = time_to_departure
+            await self._send_departure_reminder_notification(stop_config, reminder_time)
+            self._last_departure_reminder[stop_id] = time_to_departure
 
-    async def _send_bus_status_notification(self, status: str) -> None:
+    async def _send_bus_status_notification(self, stop_config: dict, status: str) -> None:
         """Send a notification about bus status change."""
-        stop_name = self.config_entry.data[CONF_DEPARTURE_STOP_NAME]
+        stop_name = stop_config[CONF_STOP_NAME]
         
         if status == BUS_STATUS_EARLY:
             title = "🚌 Bus Running Early"
@@ -112,9 +122,9 @@ class TasTransitNotificationService:
         
         await self._send_notification(title, message, "bus_status")
 
-    async def _send_departure_reminder_notification(self, minutes_to_leave: int) -> None:
+    async def _send_departure_reminder_notification(self, stop_config: dict, minutes_to_leave: int) -> None:
         """Send a notification reminder to leave for the bus."""
-        stop_name = self.config_entry.data[CONF_DEPARTURE_STOP_NAME]
+        stop_name = stop_config[CONF_STOP_NAME]
         
         if minutes_to_leave <= 0:
             title = "🏃 Time to Leave!"

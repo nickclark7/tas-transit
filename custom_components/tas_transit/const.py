@@ -7,12 +7,16 @@ DOMAIN: Final = "tas_transit"
 API_BASE_URL: Final = "https://real-time.transport.tas.gov.au/timetable/rest"
 API_STOPS_SEARCH: Final = f"{API_BASE_URL}/stops/searchbylocation"
 API_TIMEOUT: Final = 30
-UPDATE_INTERVAL: Final = 60  # seconds
+
+# Update Intervals
+UPDATE_INTERVAL_DEFAULT: Final = 300  # 5 minutes - default when no buses soon
+UPDATE_INTERVAL_FREQUENT: Final = 30  # 30 seconds - when bus within 1 hour
+UPDATE_INTERVAL_THRESHOLD: Final = 60  # 1 hour - switch to frequent updates
 
 # Configuration Keys
-CONF_DEPARTURE_STOP_ID: Final = "departure_stop_id"
-CONF_DEPARTURE_STOP_NAME: Final = "departure_stop_name"
-CONF_ARRIVAL_DESTINATION: Final = "arrival_destination"
+CONF_STOPS: Final = "stops"
+CONF_STOP_ID: Final = "stop_id"
+CONF_STOP_NAME: Final = "stop_name"
 CONF_SCHEDULED_DEPARTURE_TIME: Final = "scheduled_departure_time"
 CONF_TIME_TO_GET_THERE: Final = "time_to_get_there"
 CONF_EARLY_THRESHOLD: Final = "early_threshold"
@@ -38,3 +42,6 @@ BUS_STATUS_EARLY: Final = "early"
 BUS_STATUS_LATE: Final = "late"
 BUS_STATUS_CANCELLED: Final = "cancelled"
 BUS_STATUS_UNKNOWN: Final = "unknown"
+
+# Web URLs
+TRANSPORT_WEB_URL: Final = "https://real-time.transport.tas.gov.au/timetable/#?stop="

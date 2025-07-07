@@ -13,27 +13,27 @@ from homeassistant.helpers import config_validation as cv
 
 from .api import TasTransitApi
 from .const import (
-    CONF_ARRIVAL_DESTINATION,
     CONF_DEPARTURE_REMINDER,
-    CONF_DEPARTURE_STOP_ID,
-    CONF_DEPARTURE_STOP_NAME,
     CONF_EARLY_THRESHOLD,
     CONF_LATE_THRESHOLD,
     CONF_SCHEDULED_DEPARTURE_TIME,
+    CONF_STOP_ID,
+    CONF_STOP_NAME,
+    CONF_STOPS,
     CONF_TIME_TO_GET_THERE,
     DEFAULT_DEPARTURE_REMINDER,
     DEFAULT_EARLY_THRESHOLD,
     DEFAULT_LATE_THRESHOLD,
     DEFAULT_TIME_TO_GET_THERE,
     DOMAIN,
+    TRANSPORT_WEB_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_DEPARTURE_STOP_NAME): str,
-        vol.Required(CONF_ARRIVAL_DESTINATION, default="Hobart"): str,
+        vol.Required(CONF_STOP_ID, description={"suggested_value": "7109023"}): str,
         vol.Required(CONF_SCHEDULED_DEPARTURE_TIME): str,
         vol.Optional(CONF_TIME_TO_GET_THERE, default=DEFAULT_TIME_TO_GET_THERE): cv.positive_int,
         vol.Optional(CONF_EARLY_THRESHOLD, default=DEFAULT_EARLY_THRESHOLD): cv.positive_int,
@@ -53,52 +53,44 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
+        description_placeholders = {
+            "stop_finder_url": TRANSPORT_WEB_URL + "7109023",
+            "instructions": "To find your stop ID, visit the Tasmanian Transport website, search for your stop, and copy the ID from the URL (e.g., 7109023 from .../#?stop=7109023)",
+        }
 
         if user_input is not None:
             try:
-                # Validate the departure stop exists
+                # Validate the stop ID and get stop information
                 api = TasTransitApi()
+                stop_info = await api.get_stop_info(user_input[CONF_STOP_ID])
                 
-                # Try to find the bus stop
-                latitude = self.hass.config.latitude
-                longitude = self.hass.config.longitude
-                
-                stops = await api.search_stops_by_location(
-                    latitude, longitude, query=user_input[CONF_DEPARTURE_STOP_NAME]
-                )
-                
-                if not stops:
-                    errors["base"] = "stop_not_found"
+                if not stop_info:
+                    errors[CONF_STOP_ID] = "stop_not_found"
                 else:
-                    # Find the best matching stop
-                    stop = self._find_best_stop_match(
-                        stops, user_input[CONF_DEPARTURE_STOP_NAME]
-                    )
+                    # Validate departure time format
+                    try:
+                        self._validate_time_format(user_input[CONF_SCHEDULED_DEPARTURE_TIME])
+                    except ValueError:
+                        errors[CONF_SCHEDULED_DEPARTURE_TIME] = "invalid_time_format"
                     
-                    if not stop:
-                        errors["base"] = "stop_not_found"
-                    else:
-                        # Validate departure time format
-                        try:
-                            self._validate_time_format(user_input[CONF_SCHEDULED_DEPARTURE_TIME])
-                        except ValueError:
-                            errors[CONF_SCHEDULED_DEPARTURE_TIME] = "invalid_time_format"
+                    if not errors:
+                        # Create the config entry with stop information
+                        stop_name = stop_info.get("name", f"Stop {user_input[CONF_STOP_ID]}")
                         
-                        if not errors:
-                            # Create the config entry
-                            return self.async_create_entry(
-                                title=f"Bus from {user_input[CONF_DEPARTURE_STOP_NAME]}",
-                                data={
-                                    CONF_DEPARTURE_STOP_ID: stop["id"],
-                                    CONF_DEPARTURE_STOP_NAME: stop["name"],
-                                    CONF_ARRIVAL_DESTINATION: user_input[CONF_ARRIVAL_DESTINATION],
+                        return self.async_create_entry(
+                            title=f"Bus from {stop_name}",
+                            data={
+                                CONF_STOPS: [{
+                                    CONF_STOP_ID: user_input[CONF_STOP_ID],
+                                    CONF_STOP_NAME: stop_name,
                                     CONF_SCHEDULED_DEPARTURE_TIME: user_input[CONF_SCHEDULED_DEPARTURE_TIME],
                                     CONF_TIME_TO_GET_THERE: user_input[CONF_TIME_TO_GET_THERE],
                                     CONF_EARLY_THRESHOLD: user_input[CONF_EARLY_THRESHOLD],
                                     CONF_LATE_THRESHOLD: user_input[CONF_LATE_THRESHOLD],
                                     CONF_DEPARTURE_REMINDER: user_input[CONF_DEPARTURE_REMINDER],
-                                },
-                            )
+                                }],
+                            },
+                        )
 
             except Exception as exception:
                 _LOGGER.exception("Unexpected exception: %s", exception)
@@ -108,24 +100,74 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
+            description_placeholders=description_placeholders,
         )
 
-    def _find_best_stop_match(self, stops: list[dict], query: str) -> dict | None:
-        """Find the best matching stop from search results."""
-        query_lower = query.lower()
-        
-        # First try exact match
-        for stop in stops:
-            if stop["name"].lower() == query_lower:
-                return stop
-        
-        # Then try partial match
-        for stop in stops:
-            if query_lower in stop["name"].lower():
-                return stop
-        
-        # Return first result if no good match
-        return stops[0] if stops else None
+    async def async_step_add_stop(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle adding an additional stop."""
+        errors: dict[str, str] = {}
+        description_placeholders = {
+            "stop_finder_url": TRANSPORT_WEB_URL + "7109023",
+            "instructions": "To find your stop ID, visit the Tasmanian Transport website, search for your stop, and copy the ID from the URL (e.g., 7109023 from .../#?stop=7109023)",
+        }
+
+        if user_input is not None:
+            try:
+                # Validate the stop ID and get stop information
+                api = TasTransitApi()
+                stop_info = await api.get_stop_info(user_input[CONF_STOP_ID])
+                
+                if not stop_info:
+                    errors[CONF_STOP_ID] = "stop_not_found"
+                else:
+                    # Validate departure time format
+                    try:
+                        self._validate_time_format(user_input[CONF_SCHEDULED_DEPARTURE_TIME])
+                    except ValueError:
+                        errors[CONF_SCHEDULED_DEPARTURE_TIME] = "invalid_time_format"
+                    
+                    if not errors:
+                        # Get existing config data
+                        existing_config = self.hass.config_entries.async_entries(DOMAIN)[0]
+                        existing_data = dict(existing_config.data)
+                        
+                        # Add new stop to existing stops
+                        stop_name = stop_info.get("name", f"Stop {user_input[CONF_STOP_ID]}")
+                        new_stop = {
+                            CONF_STOP_ID: user_input[CONF_STOP_ID],
+                            CONF_STOP_NAME: stop_name,
+                            CONF_SCHEDULED_DEPARTURE_TIME: user_input[CONF_SCHEDULED_DEPARTURE_TIME],
+                            CONF_TIME_TO_GET_THERE: user_input[CONF_TIME_TO_GET_THERE],
+                            CONF_EARLY_THRESHOLD: user_input[CONF_EARLY_THRESHOLD],
+                            CONF_LATE_THRESHOLD: user_input[CONF_LATE_THRESHOLD],
+                            CONF_DEPARTURE_REMINDER: user_input[CONF_DEPARTURE_REMINDER],
+                        }
+                        
+                        existing_data[CONF_STOPS].append(new_stop)
+                        
+                        # Update the config entry
+                        self.hass.config_entries.async_update_entry(
+                            existing_config,
+                            data=existing_data,
+                        )
+                        
+                        return self.async_create_entry(
+                            title=f"Added stop: {stop_name}",
+                            data=existing_data,
+                        )
+
+            except Exception as exception:
+                _LOGGER.exception("Unexpected exception: %s", exception)
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="add_stop",
+            data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
+            description_placeholders=description_placeholders,
+        )
 
     def _validate_time_format(self, time_str: str) -> None:
         """Validate time format (HH:MM)."""

@@ -45,6 +45,25 @@ class TasTransitApi:
         if self._session and not self._session.closed:
             await self._session.close()
 
+    async def get_stop_info(self, stop_id: str) -> dict[str, Any] | None:
+        """Get information about a specific stop by ID."""
+        stop_url = f"{API_BASE_URL}/stops/{stop_id}"
+        
+        try:
+            session = await self._get_session()
+            async with async_timeout.timeout(API_TIMEOUT):
+                async with session.get(stop_url) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    return data
+
+        except asyncio.TimeoutError as err:
+            raise TasTransitApiTimeoutError(f"Timeout while getting stop info for {stop_id}") from err
+        except aiohttp.ClientError as err:
+            raise TasTransitApiConnectionError(f"Connection error: {err}") from err
+        except Exception as err:
+            raise TasTransitApiError(f"Unexpected error: {err}") from err
+
     async def search_stops_by_location(
         self,
         latitude: float,

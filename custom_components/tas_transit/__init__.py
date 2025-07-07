@@ -9,7 +9,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN, UPDATE_INTERVAL
+from .const import DOMAIN, UPDATE_INTERVAL_DEFAULT
 from .coordinator import TasTransitDataUpdateCoordinator
 from .notify import TasTransitNotificationService
 
@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass,
         _LOGGER,
         name=DOMAIN,
-        update_interval=timedelta(seconds=UPDATE_INTERVAL),
+        update_interval=timedelta(seconds=UPDATE_INTERVAL_DEFAULT),
         config_entry=entry,
     )
     
