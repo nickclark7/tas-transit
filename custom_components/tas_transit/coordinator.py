@@ -129,30 +129,26 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
 
     def _get_scheduled_time(self, departure: dict[str, Any]) -> datetime | None:
         """Extract scheduled departure time from departure data."""
-        # Try different possible field names for scheduled time
+        # The stopdisplays API uses specific field names
         time_fields = [
             "scheduledArrivalTime",
             "scheduledDepartureTime",
-            "scheduled_arrival_time",
-            "scheduled_departure_time",
             "departureTime",
             "arrivalTime",
         ]
         
         for field in time_fields:
-            if field in departure:
+            if field in departure and departure[field]:
                 return self.api.parse_departure_time(departure[field])
         
         return None
 
     def _get_estimated_time(self, departure: dict[str, Any]) -> datetime | None:
         """Extract estimated departure time from departure data."""
-        # Try different possible field names for estimated time
+        # The stopdisplays API uses specific field names
         time_fields = [
             "estimatedDepartureTime",
             "estimatedArrivalTime",
-            "estimated_departure_time",
-            "estimated_arrival_time",
             "realTimeDepartureTime",
             "realTimeArrivalTime",
         ]

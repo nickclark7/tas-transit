@@ -134,7 +134,10 @@ class TasTransitNextBusSensor(TasTransitSensorBase):
         attributes = {
             "route": next_departure.get("route", "Unknown"),
             "destination": next_departure.get("destination", "Unknown"),
+            "line_name": next_departure.get("lineName", "Unknown"),
+            "trip_id": next_departure.get("tripId", "Unknown"),
             "scheduled_time": self.coordinator._get_scheduled_time(next_departure),
+            "cancelled": next_departure.get("cancelled", False),
             "stop_id": self.stop_id,
         }
         
@@ -304,6 +307,9 @@ class TasTransitBusRouteSensor(TasTransitSensorBase):
         next_departure = stop_data["next_departure"]
         return {
             "destination": next_departure.get("destination", "Unknown"),
+            "line_name": next_departure.get("lineName", "Unknown"),
+            "trip_id": next_departure.get("tripId", "Unknown"),
             "operator": next_departure.get("operator", "Unknown"),
+            "cancelled": next_departure.get("cancelled", False),
             "stop_id": self.stop_id,
         }

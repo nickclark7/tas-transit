@@ -9,7 +9,7 @@ from typing import Any
 import aiohttp
 import async_timeout
 
-from .const import API_BASE_URL, API_STOPS_SEARCH, API_TIMEOUT
+from .const import API_BASE_URL, API_STOPS_SEARCH, API_STOPDISPLAYS, API_TIMEOUT
 from .exceptions import TasTransitApiException
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,8 +46,8 @@ class TasTransitApi:
             await self._session.close()
 
     async def get_stop_info(self, stop_id: str) -> dict[str, Any] | None:
-        """Get information about a specific stop by ID."""
-        stop_url = f"{API_BASE_URL}/stops/{stop_id}"
+        """Get stop display information including departures."""
+        stop_url = f"{API_STOPDISPLAYS}/{stop_id}"
         
         try:
             session = await self._get_session()
@@ -106,11 +106,7 @@ class TasTransitApi:
 
     async def get_stop_departures(self, stop_id: str) -> list[dict[str, Any]]:
         """Get departure information for a specific stop."""
-        # Note: The exact API endpoint for departures needs to be determined
-        # Based on the user's example, it might be something like:
-        # /timetable/rest/stops/{stop_id}/departures
-        
-        departure_url = f"{API_BASE_URL}/stops/{stop_id}/departures"
+        departure_url = f"{API_STOPDISPLAYS}/{stop_id}"
         
         try:
             session = await self._get_session()
@@ -119,19 +115,10 @@ class TasTransitApi:
                     response.raise_for_status()
                     data = await response.json()
                     
-                    # Parse the departure data
+                    # Extract departures from the stopdisplays response
                     departures = []
-                    if isinstance(data, dict):
-                        # Handle different possible response formats
-                        if "departures" in data:
-                            departures = data["departures"]
-                        elif "services" in data:
-                            departures = data["services"]
-                        else:
-                            # If the response is a single object, wrap it in a list
-                            departures = [data]
-                    elif isinstance(data, list):
-                        departures = data
+                    if isinstance(data, dict) and "departures" in data:
+                        departures = data["departures"]
                     
                     return departures
 

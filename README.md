@@ -140,7 +140,9 @@ automation:
 This integration uses the Tasmanian Government's real-time transport API:
 - Base URL: `https://real-time.transport.tas.gov.au/timetable/rest`
 - Stop Search: `/stops/searchbylocation`
-- Departures: `/stops/{stop_id}/departures`
+- Stop Displays: `/stopdisplays/{stop_id}`
+
+The integration automatically fetches stop names from the API, so you'll see friendly names like "Huon Hwy Grove Store" instead of just the stop ID.
 
 ## Support
 

@@ -74,8 +74,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors[CONF_SCHEDULED_DEPARTURE_TIME] = "invalid_time_format"
                     
                     if not errors:
-                        # Create the config entry with stop information
-                        stop_name = stop_info.get("name", f"Stop {user_input[CONF_STOP_ID]}")
+                        # Extract stop name from the API response
+                        # The API returns stop info in stop_info["stop"]["name"]
+                        stop_name = "Unknown Stop"
+                        if "stop" in stop_info and "name" in stop_info["stop"]:
+                            stop_name = stop_info["stop"]["name"]
+                        elif "name" in stop_info:
+                            stop_name = stop_info["name"]
+                        else:
+                            stop_name = f"Stop {user_input[CONF_STOP_ID]}"
                         
                         return self.async_create_entry(
                             title=f"Bus from {stop_name}",
