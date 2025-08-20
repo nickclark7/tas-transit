@@ -1,0 +1,316 @@
+# Mushroom Card Examples for Tasmanian Transport Integration
+# Copy these examples to your Home Assistant dashboard
+
+# =============================================================================
+# 🎯 SINGLE SOURCE OF TRUTH - Change these variables to customize all cards!
+# =============================================================================
+#
+# STEP 1: Copy one of the config blocks below to the top of each card template
+# STEP 2: Modify the values to match your setup
+# STEP 3: The entire card will automatically update!
+#
+# Basic Config Block (copy this):
+# {% set CONFIG = {
+#   'sensor': 'sensor.your_stop_next_bus_departure',
+#   'destination': 'Geeveston',
+#   'route': 'X58'
+# } %}
+#
+# =============================================================================
+
+# Basic Destination Filter Card
+type: custom:mushroom-template-card
+primary: >-
+  {% set CONFIG = {
+    'sensor': 'sensor.your_stop_next_bus_departure',
+    'destination': 'Geeveston'
+  } %}
+  Buses to {{ CONFIG.destination }}
+secondary: >-
+  {% set CONFIG = {
+    'sensor': 'sensor.your_stop_next_bus_departure',
+    'destination': 'Geeveston'
+  } %}
+  {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+  {% if departures and departures is iterable and departures is not string %}
+    {% set next_bus = namespace(found=false, bus=none) %}
+    {% for dep in departures %}
+      {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() and not next_bus.found %}
+        {% set next_bus.found = true %}
+        {% set next_bus.bus = dep %}
+      {% endif %}
+    {% endfor %}
+    {% if next_bus.found %}
+      Next: Route {{ next_bus.bus.line_number or 'Unknown' }} in {{ next_bus.bus.estimated_minutes_until or next_bus.bus.scheduled_minutes_until or '?' }} min
+    {% else %}
+      No buses to {{ CONFIG.destination }} found
+    {% endif %}
+  {% else %}
+    Loading...
+  {% endif %}
+icon: mdi:bus
+icon_color: >-
+  {% set CONFIG = {
+    'sensor': 'sensor.your_stop_next_bus_departure',
+    'destination': 'Geeveston'
+  } %}
+  {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+  {% if departures and departures is iterable and departures is not string %}
+    {% set next_bus = namespace(found=false, minutes=none) %}
+    {% for dep in departures %}
+      {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() and not next_bus.found %}
+        {% set next_bus.found = true %}
+        {% set next_bus.minutes = dep.estimated_minutes_until or dep.scheduled_minutes_until %}
+      {% endif %}
+    {% endfor %}
+    {% if next_bus.found and next_bus.minutes is not none %}
+      {% if next_bus.minutes <= 5 %}red
+      {% elif next_bus.minutes <= 15 %}orange
+      {% else %}green
+      {% endif %}
+    {% else %}grey
+    {% endif %}
+  {% else %}blue
+  {% endif %}
+tap_action:
+  action: more-info
+  entity: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {{ CONFIG.sensor }}
+
+---
+# Multi-Bus Display Card
+- type: custom:mushroom-template-card
+  primary: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    All Buses to {{ CONFIG.destination }}
+  secondary: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set buses = [] %}
+      {% for dep in departures %}
+        {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() %}
+          {% set buses = buses + [dep] %}
+        {% endif %}
+      {% endfor %}
+      {% if buses %}
+        {% for bus in buses[:3] %}
+          Route {{ bus.line_number or 'Unknown' }}: {{ bus.estimated_minutes_until or bus.scheduled_minutes_until or '?' }} min
+          {%- if not loop.last %} • {% endif %}
+        {% endfor %}
+        {% if buses | length > 3 %}
+          + {{ buses | length - 3 }} more
+        {% endif %}
+      {% else %}
+        No buses to {{ CONFIG.destination }} today
+      {% endif %}
+    {% else %}
+      Checking departures...
+    {% endif %}
+  icon: mdi:map-marker-path
+  icon_color: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set has_buses = namespace(found=false) %}
+      {% for dep in departures %}
+        {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() %}
+          {% set has_buses.found = true %}
+        {% endif %}
+      {% endfor %}
+      {% if has_buses.found %}green{% else %}grey{% endif %}
+    {% else %}blue{% endif %}
+  badge_icon: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set bus_count = 0 %}
+      {% for dep in departures %}
+        {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() %}
+          {% set bus_count = bus_count + 1 %}
+        {% endif %}
+      {% endfor %}
+      {% if bus_count > 0 and bus_count <= 9 %}
+        mdi:numeric-{{ bus_count }}-circle
+      {% elif bus_count > 9 %}
+        mdi:numeric-9-plus-circle
+      {% endif %}
+    {% endif %}
+  badge_color: blue
+  tap_action:
+    action: more-info
+    entity: >-
+      {% set CONFIG = {
+        'sensor': 'sensor.your_stop_next_bus_departure',
+        'destination': 'Geeveston'
+      } %}
+      {{ CONFIG.sensor }}
+
+---
+# Route-Specific Card
+- type: custom:mushroom-template-card
+  primary: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'route': 'X58'
+    } %}
+    {{ CONFIG.route }} Express Bus
+  secondary: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'route': 'X58'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set route_bus = namespace(found=false, bus=none) %}
+      {% for dep in departures %}
+        {% if dep and dep.line_number == CONFIG.route and not route_bus.found %}
+          {% set route_bus.found = true %}
+          {% set route_bus.bus = dep %}
+        {% endif %}
+      {% endfor %}
+      {% if route_bus.found %}
+        To {{ route_bus.bus.destination or 'Unknown' }} in {{ route_bus.bus.estimated_minutes_until or route_bus.bus.scheduled_minutes_until or '?' }} min
+        {% if route_bus.bus.cancelled %}(CANCELLED){% endif %}
+      {% else %}
+        No {{ CONFIG.route }} buses scheduled
+      {% endif %}
+    {% else %}
+      Loading...
+    {% endif %}
+  icon: mdi:bus-clock
+  icon_color: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'route': 'X58'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set route_bus = namespace(found=false, bus=none) %}
+      {% for dep in departures %}
+        {% if dep and dep.line_number == CONFIG.route and not route_bus.found %}
+          {% set route_bus.found = true %}
+          {% set route_bus.bus = dep %}
+        {% endif %}
+      {% endfor %}
+      {% if route_bus.found %}
+        {% if route_bus.bus.cancelled %}red
+        {% else %}
+          {% set minutes = route_bus.bus.estimated_minutes_until or route_bus.bus.scheduled_minutes_until %}
+          {% if minutes <= 10 %}red
+          {% elif minutes <= 20 %}orange
+          {% else %}green
+          {% endif %}
+        {% endif %}
+      {% else %}grey
+      {% endif %}
+    {% else %}blue
+    {% endif %}
+  tap_action:
+    action: more-info
+    entity: >-
+      {% set CONFIG = {
+        'sensor': 'sensor.your_stop_next_bus_departure',
+        'route': 'X58'
+      } %}
+      {{ CONFIG.sensor }}
+
+---
+# Simple Entity Card
+- type: custom:mushroom-entity-card
+  entity: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {{ CONFIG.sensor }}
+  name: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {{ CONFIG.destination }} Buses
+  secondary_info: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set next_bus = namespace(found=false, bus=none) %}
+      {% for dep in departures %}
+        {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() and not next_bus.found %}
+          {% set next_bus.found = true %}
+          {% set next_bus.bus = dep %}
+        {% endif %}
+      {% endfor %}
+      {% if next_bus.found %}
+        Next: {{ next_bus.bus.line_number or 'Unknown' }} in {{ next_bus.bus.estimated_minutes_until or next_bus.bus.scheduled_minutes_until or '?' }}min
+      {% else %}
+        No {{ CONFIG.destination }} buses
+      {% endif %}
+    {% else %}
+      Loading...
+    {% endif %}
+  icon: mdi:bus-stop
+  icon_color: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set next_bus = namespace(found=false, minutes=none) %}
+      {% for dep in departures %}
+        {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() and not next_bus.found %}
+          {% set next_bus.found = true %}
+          {% set next_bus.minutes = dep.estimated_minutes_until or dep.scheduled_minutes_until %}
+        {% endif %}
+      {% endfor %}
+      {% if next_bus.found and next_bus.minutes is not none %}
+        {% if next_bus.minutes <= 5 %}red
+        {% elif next_bus.minutes <= 15 %}orange
+        {% else %}green
+        {% endif %}
+      {% else %}grey
+      {% endif %}
+    {% else %}blue
+    {% endif %}
+  badge_icon: >-
+    {% set CONFIG = {
+      'sensor': 'sensor.your_stop_next_bus_departure',
+      'destination': 'Geeveston'
+    } %}
+    {% set departures = state_attr(CONFIG.sensor, 'all_departures') %}
+    {% if departures and departures is iterable and departures is not string %}
+      {% set bus_count = 0 %}
+      {% for dep in departures %}
+        {% if dep and dep.destination and CONFIG.destination.lower() in dep.destination.lower() %}
+          {% set bus_count = bus_count + 1 %}
+        {% endif %}
+      {% endfor %}
+      {% if bus_count > 0 and bus_count <= 9 %}
+        mdi:numeric-{{ bus_count }}-circle
+      {% elif bus_count > 9 %}
+        mdi:numeric-9-plus-circle
+      {% endif %}
+    {% endif %}
+  badge_color: blue
+  tap_action:
+    action: more-info

@@ -13,10 +13,15 @@ from homeassistant.helpers import config_validation as cv
 
 from .api import TasTransitApi
 from .const import (
+    CONF_DESTINATION_FILTERS,
+    CONF_FILTER_MODE,
+    CONF_LINE_FILTERS,
     CONF_STOP_ID,
     CONF_STOP_NAME,
     CONF_STOPS,
     DOMAIN,
+    FILTER_MODE_INCLUDE,
+    FILTER_MODE_EXCLUDE,
     TRANSPORT_WEB_URL,
 )
 
@@ -28,11 +33,31 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     }
 )
 
+STEP_FILTERS_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_LINE_FILTERS, description={"suggested_value": "X58,457,401"}): str,
+        vol.Optional(CONF_DESTINATION_FILTERS, description={"suggested_value": "Mount Nelson,University"}): str,
+        vol.Optional(CONF_FILTER_MODE, default=FILTER_MODE_INCLUDE): vol.In([FILTER_MODE_INCLUDE, FILTER_MODE_EXCLUDE]),
+    }
+)
+
+
+def _parse_filter_list(filter_string: str | None) -> list[str]:
+    """Parse a comma-separated filter string into a list."""
+    if not filter_string:
+        return []
+    return [item.strip() for item in filter_string.split(",") if item.strip()]
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Tasmanian Transport."""
 
     VERSION = 1
+    
+    def __init__(self) -> None:
+        """Initialize the config flow."""
+        self._stop_id: str | None = None
+        self._stop_name: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -63,15 +88,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     else:
                         stop_name = f"Stop {user_input[CONF_STOP_ID]}"
                     
-                    return self.async_create_entry(
-                        title=f"Bus from {stop_name}",
-                        data={
-                            CONF_STOPS: [{
-                                CONF_STOP_ID: user_input[CONF_STOP_ID],
-                                CONF_STOP_NAME: stop_name,
-                            }],
-                        },
-                    )
+                    # Store stop info and proceed to filter configuration
+                    self._stop_id = user_input[CONF_STOP_ID]
+                    self._stop_name = stop_name
+                    return await self.async_step_filters()
 
             except Exception as exception:
                 _LOGGER.exception("Unexpected exception: %s", exception)
@@ -81,6 +101,49 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
+            description_placeholders=description_placeholders,
+        )
+
+    async def async_step_filters(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle the filter configuration step."""
+        if user_input is not None:
+            # Parse filter inputs
+            line_filters = _parse_filter_list(user_input.get(CONF_LINE_FILTERS))
+            destination_filters = _parse_filter_list(user_input.get(CONF_DESTINATION_FILTERS))
+            filter_mode = user_input.get(CONF_FILTER_MODE, FILTER_MODE_INCLUDE)
+            
+            # Create the stop configuration
+            stop_config = {
+                CONF_STOP_ID: self._stop_id,
+                CONF_STOP_NAME: self._stop_name,
+            }
+            
+            # Add filters if provided
+            if line_filters:
+                stop_config[CONF_LINE_FILTERS] = line_filters
+            if destination_filters:
+                stop_config[CONF_DESTINATION_FILTERS] = destination_filters
+            if line_filters or destination_filters:
+                stop_config[CONF_FILTER_MODE] = filter_mode
+            
+            return self.async_create_entry(
+                title=f"Bus from {self._stop_name}",
+                data={
+                    CONF_STOPS: [stop_config],
+                },
+            )
+
+        # Show filter configuration form
+        description_placeholders = {
+            "stop_name": self._stop_name,
+            "examples": "Example filters: Line numbers like 'X58,457,401' or destinations like 'Mount Nelson,University'. Leave empty to show all departures.",
+        }
+        
+        return self.async_show_form(
+            step_id="filters",
+            data_schema=STEP_FILTERS_DATA_SCHEMA,
             description_placeholders=description_placeholders,
         )
 

@@ -18,6 +18,9 @@ UPDATE_INTERVAL_THRESHOLD: Final = 30 # 30 minutes - switch to frequent updates
 CONF_STOPS: Final = "stops"
 CONF_STOP_ID: Final = "stop_id"
 CONF_STOP_NAME: Final = "stop_name"
+CONF_LINE_FILTERS: Final = "line_filters"
+CONF_DESTINATION_FILTERS: Final = "destination_filters"
+CONF_FILTER_MODE: Final = "filter_mode"
 
 # Sensor Names
 SENSOR_NEXT_BUS: Final = "next_bus_departure"
@@ -26,3 +29,7 @@ SENSOR_BUS_ROUTE: Final = "bus_route"
 
 # Web URLs
 TRANSPORT_WEB_URL: Final = "https://real-time.transport.tas.gov.au/timetable/#?stop="
+
+# Filter Configuration
+FILTER_MODE_INCLUDE: Final = "include"
+FILTER_MODE_EXCLUDE: Final = "exclude"

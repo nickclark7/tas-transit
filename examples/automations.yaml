@@ -1,0 +1,149 @@
+# Automation Examples for Tasmanian Transport Integration
+# Copy these examples to your Home Assistant automations.yaml or create them in the UI
+# Replace sensor entity IDs with your actual sensors
+
+# Basic Departure Reminder
+# Alerts when any bus is 10 minutes away
+- alias: "Bus Departure Reminder"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.hobart_interchange_time_to_departure
+      below: 10  # Alert when bus is 10 minutes away
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "🚌 Bus Approaching"
+        message: "Your {{ state_attr('sensor.hobart_interchange_bus_route', 'line_number') }} bus to {{ state_attr('sensor.hobart_interchange_bus_route', 'destination') }} departs in {{ states('sensor.hobart_interchange_time_to_departure') }} minutes!"
+
+---
+
+# Route-Specific Notification
+# Only alerts for X58 buses
+- alias: "X58 Bus Alert" 
+  trigger:
+    - platform: state
+      entity_id: sensor.hobart_interchange_bus_route
+      to: "X58"
+  condition:
+    - condition: numeric_state
+      entity_id: sensor.hobart_interchange_time_to_departure
+      below: 15
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "🚌 X58 Express Coming"
+        message: "Your X58 bus to {{ state_attr('sensor.hobart_interchange_bus_route', 'destination') }} departs in {{ states('sensor.hobart_interchange_time_to_departure') }} minutes!"
+
+---
+
+# Destination-Specific Alert (Configurable)
+# CUSTOMIZE THIS LINE: Change 'University' to your desired destination
+- alias: >
+    {% set destination = 'University' %}
+    {{ destination }} Bus Alert
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.hobart_interchange_time_to_departure
+      below: 15
+  condition:
+    - condition: template
+      value_template: >
+        {% set destination = 'University' %}
+        {{ destination in state_attr('sensor.hobart_interchange_bus_route', 'destination') }}
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: >
+          {% set destination = 'University' %}
+          🎯 {{ destination }} Bus Coming
+        message: >
+          {% set destination = 'University' %}
+          Route {{ state_attr('sensor.hobart_interchange_bus_route', 'line_number') }} to {{ destination }} departs in {{ states('sensor.hobart_interchange_time_to_departure') }} minutes!
+
+---
+
+# Multiple Stops Monitoring
+# Alerts when any of your monitored stops has an approaching bus
+- alias: "Any Bus Approaching"
+  trigger:
+    - platform: numeric_state
+      entity_id: 
+        - sensor.home_stop_time_to_departure
+        - sensor.work_stop_time_to_departure
+        - sensor.shopping_center_time_to_departure
+      below: 10
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "🚌 Bus Approaching"
+        message: >
+          Bus from {{ state_attr(trigger.entity_id | replace('_time_to_departure', '_next_bus_departure'), 'stop_name') or 'your stop' }} 
+          departs in {{ trigger.to_state.state }} minutes!
+
+---
+
+# Early Morning Commute Helper
+# Only runs during weekday morning commute hours
+- alias: "Morning Commute Bus Alert"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.home_stop_time_to_departure
+      below: 12
+  condition:
+    - condition: time
+      after: "06:30:00"
+      before: "09:30:00"
+    - condition: time
+      weekday:
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+    - condition: template
+      value_template: >
+        {{ 'City' in state_attr('sensor.home_stop_bus_route', 'destination') or
+           'Hobart' in state_attr('sensor.home_stop_bus_route', 'destination') }}
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "☀️ Morning Commute"
+        message: "Your {{ state_attr('sensor.home_stop_bus_route', 'line_number') }} bus to work departs in {{ states('sensor.home_stop_time_to_departure') }} minutes!"
+
+---
+
+# Cancelled Bus Alert
+# Alerts when the next bus is cancelled
+- alias: "Bus Cancelled Alert"
+  trigger:
+    - platform: state
+      entity_id: sensor.hobart_interchange_next_bus_departure
+  condition:
+    - condition: template
+      value_template: >
+        {{ state_attr('sensor.hobart_interchange_next_bus_departure', 'cancelled') == true }}
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "❌ Bus Cancelled"
+        message: "Your {{ state_attr('sensor.hobart_interchange_next_bus_departure', 'line_number') }} bus to {{ state_attr('sensor.hobart_interchange_next_bus_departure', 'destination') }} has been cancelled!"
+
+---
+
+# Weekend Service Reminder
+# Different timing for weekend buses (they're less frequent)
+- alias: "Weekend Bus Reminder"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.home_stop_time_to_departure
+      below: 20  # Earlier warning on weekends
+  condition:
+    - condition: time
+      weekday:
+        - sat
+        - sun
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "🚌 Weekend Bus"
+        message: "Your {{ state_attr('sensor.home_stop_bus_route', 'line_number') }} bus departs in {{ states('sensor.home_stop_time_to_departure') }} minutes. Next bus may be much later!"

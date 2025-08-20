@@ -20,6 +20,20 @@
         "data_description": {
           "stop_id": "Your postcode + 3 digits (e.g., 7109023 for postcode 7109)"
         }
+      },
+      "filters": {
+        "title": "Configure Filters (Optional)",
+        "description": "Filter departures to show only specific bus routes or destinations. This is optional - leave blank to show all departures from {stop_name}.\n\n**Examples:**\n- Line filters: X58,457,401\n- Destination filters: Mount Nelson,University,Sandy Bay\n\n{examples}",
+        "data": {
+          "line_filters": "Line Numbers (comma-separated)",
+          "destination_filters": "Destinations (comma-separated)",
+          "filter_mode": "Filter Mode"
+        },
+        "data_description": {
+          "line_filters": "Specific route numbers to include/exclude (e.g., X58,457)",
+          "destination_filters": "Specific destinations to include/exclude (e.g., Mount Nelson,University)",
+          "filter_mode": "Include only matching or exclude matching"
+        }
       }
     },
     "error": {

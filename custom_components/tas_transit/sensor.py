@@ -16,6 +16,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_DESTINATION_FILTERS,
+    CONF_FILTER_MODE,
+    CONF_LINE_FILTERS,
     CONF_STOP_ID,
     CONF_STOP_NAME,
     CONF_STOPS,
@@ -84,6 +87,35 @@ class TasTransitSensorBase(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return None
         return self.coordinator.data.get(self.stop_id)
+    
+    @property
+    def stop_config(self) -> dict[str, Any] | None:
+        """Get the configuration for this stop."""
+        for stop_config in self.config_entry.data[CONF_STOPS]:
+            if stop_config[CONF_STOP_ID] == self.stop_id:
+                return stop_config
+        return None
+    
+    def _get_filter_attributes(self) -> dict[str, Any]:
+        """Get filter-related attributes."""
+        stop_config = self.stop_config
+        if not stop_config:
+            return {}
+        
+        attributes = {}
+        
+        line_filters = stop_config.get(CONF_LINE_FILTERS, [])
+        destination_filters = stop_config.get(CONF_DESTINATION_FILTERS, [])
+        filter_mode = stop_config.get(CONF_FILTER_MODE)
+        
+        if line_filters:
+            attributes["line_filters"] = line_filters
+        if destination_filters:
+            attributes["destination_filters"] = destination_filters
+        if filter_mode:
+            attributes["filter_mode"] = filter_mode
+            
+        return attributes
 
 
 class TasTransitNextBusSensor(TasTransitSensorBase):
@@ -98,32 +130,63 @@ class TasTransitNextBusSensor(TasTransitSensorBase):
     ) -> None:
         """Initialize the next bus sensor."""
         super().__init__(coordinator, config_entry, stop_id, stop_name, SENSOR_NEXT_BUS)
-        self._attr_name = f"{stop_name} Next Bus"
-        self._attr_device_class = SensorDeviceClass.TIMESTAMP
+        self._attr_name = f"{stop_name} Next Bus Departure"
         self._attr_icon = "mdi:bus"
 
     @property
-    def native_value(self) -> datetime | None:
-        """Return the next bus departure time."""
+    def native_value(self) -> str:
+        """Return the next bus departure information."""
         stop_data = self.stop_data
-        if not stop_data or not stop_data.get("next_departure"):
-            return None
+        if not stop_data:
+            _LOGGER.debug("No stop data available for stop %s", self.stop_id)
+            return "No data"
+            
+        if not stop_data.get("next_departure"):
+            _LOGGER.debug("No next departure found for stop %s", self.stop_id)
+            return "No departures"
         
         next_departure = stop_data["next_departure"]
-        return self.coordinator._get_scheduled_time(next_departure)
+        
+        # Get time information
+        estimated_min = next_departure.get("estimatedMinutesUntilDeparture")
+        scheduled_min = next_departure.get("scheduledMinutesUntilDeparture")
+        
+        minutes_until = estimated_min if estimated_min is not None else scheduled_min
+        
+        if minutes_until is None:
+            _LOGGER.debug("No time information for departure: %s", next_departure)
+            return "Unknown time"
+            
+        # Format the display string
+        line_number = next_departure.get("lineNumber", "Unknown")
+        destination = next_departure.get("destinationName", "Unknown")
+        
+        if minutes_until == 0:
+            return f"Route {line_number} to {destination} - Due now"
+        elif minutes_until == 1:
+            return f"Route {line_number} to {destination} - 1 minute"
+        else:
+            return f"Route {line_number} to {destination} - {minutes_until} minutes"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
         stop_data = self.stop_data
+        
+        # Start with basic attributes and filter information
+        attributes = {
+            "stop_id": self.stop_id,
+            **self._get_filter_attributes(),
+        }
+        
         if not stop_data or not stop_data.get("next_departure"):
-            return {"stop_id": self.stop_id}
+            return attributes
         
         next_departure = stop_data["next_departure"]
         scheduled_time = self.coordinator._get_scheduled_time(next_departure)
         estimated_time = self.coordinator._get_estimated_time(next_departure)
         
-        attributes = {
+        attributes.update({
             "line_number": next_departure.get("lineNumber", "Unknown"),
             "destination": next_departure.get("destinationName", "Unknown"),
             "trip_id": next_departure.get("tripId", "Unknown"),
@@ -132,9 +195,8 @@ class TasTransitNextBusSensor(TasTransitSensorBase):
             "cancelled": next_departure.get("cancelled", False),
             "scheduled_minutes_until": next_departure.get("scheduledMinutesUntilDeparture"),
             "estimated_minutes_until": next_departure.get("estimatedMinutesUntilDeparture"),
-            "stop_id": self.stop_id,
             "all_departures": self._get_all_departures_info(),
-        }
+        })
         
         if estimated_time:
             attributes["estimated_time"] = estimated_time
@@ -202,6 +264,7 @@ class TasTransitTimeToDepartureSensor(TasTransitSensorBase):
         """Return additional state attributes."""
         return {
             "stop_id": self.stop_id,
+            **self._get_filter_attributes(),
         }
 
 
@@ -235,20 +298,28 @@ class TasTransitBusRouteSensor(TasTransitSensorBase):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
         stop_data = self.stop_data
+        
+        # Start with basic attributes and filter information
+        attributes = {
+            "stop_id": self.stop_id,
+            **self._get_filter_attributes(),
+        }
+        
         if not stop_data or not stop_data.get("next_departure"):
-            return {"stop_id": self.stop_id}
+            return attributes
         
         next_departure = stop_data["next_departure"]
-        return {
+        attributes.update({
             "destination": next_departure.get("destinationName", "Unknown"),
             "trip_id": next_departure.get("tripId", "Unknown"),
             "platform_code": next_departure.get("platformCode", "Unknown"),
             "cancelled": next_departure.get("cancelled", False),
             "scheduled_minutes_until": next_departure.get("scheduledMinutesUntilDeparture"),
             "estimated_minutes_until": next_departure.get("estimatedMinutesUntilDeparture"),
-            "stop_id": self.stop_id,
             "all_departures": self._get_all_departures_info(),
-        }
+        })
+        
+        return attributes
 
     def _get_all_departures_info(self) -> list[dict[str, Any]]:
         """Get information for all upcoming departures."""

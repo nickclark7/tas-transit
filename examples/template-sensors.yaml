@@ -1,0 +1,186 @@
+# Template Sensor Examples for Tasmanian Transport Integration
+# Add these to your configuration.yaml under the 'template:' section
+# Replace sensor entity IDs with your actual sensors
+
+template:
+  # Destination Buses Counter (Configurable)
+  # CUSTOMIZE THIS LINE: Change 'University' to your desired destination
+  - sensor:
+      - name: >
+          {% set destination = 'University' %}
+          {{ destination }} Buses Count
+        state: >
+          {% set destination = 'University' %}
+          {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+          {% if departures %}
+            {% set filtered_buses = departures | selectattr('destination', 'search', destination) | list %}
+            {{ filtered_buses | length }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          next_bus: >
+            {% set destination = 'University' %}
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set filtered_buses = departures | selectattr('destination', 'search', destination) | list %}
+              {% if filtered_buses %}
+                Route {{ filtered_buses[0].line_number }} in {{ filtered_buses[0].estimated_minutes_until or filtered_buses[0].scheduled_minutes_until }} min
+              {% else %}
+                None scheduled
+              {% endif %}
+            {% endif %}
+          all_buses: >
+            {% set destination = 'University' %}
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set filtered_buses = departures | selectattr('destination', 'search', destination) | list %}
+              {{ filtered_buses }}
+            {% else %}
+              []
+            {% endif %}
+        icon: mdi:map-marker
+
+  # Express Services Only
+  # Shows only X-series express buses (X58, X59, etc.)
+  - sensor:
+      - name: "Express Bus Services"
+        state: >
+          {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+          {% if departures %}
+            {% set express_buses = departures | selectattr('line_number', 'match', '^X') | list %}
+            {{ express_buses | length }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          next_express: >
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set express_buses = departures | selectattr('line_number', 'match', '^X') | list %}
+              {% if express_buses %}
+                {{ express_buses[0].line_number }} to {{ express_buses[0].destination }} in {{ express_buses[0].estimated_minutes_until or express_buses[0].scheduled_minutes_until }} min
+              {% else %}
+                No express services
+              {% endif %}
+            {% endif %}
+          express_routes: >
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set express_buses = departures | selectattr('line_number', 'match', '^X') | list %}
+              {{ express_buses | map(attribute='line_number') | unique | list | join(', ') }}
+            {% endif %}
+        icon: mdi:bus-clock
+
+  # Buses Departing Soon
+  # Shows buses leaving in the next 15 minutes
+  - sensor:
+      - name: "Buses Departing Soon" 
+        state: >
+          {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+          {% if departures %}
+            {% set soon_buses = departures | selectattr('estimated_minutes_until', 'lt', 16) | list %}
+            {% if soon_buses | length == 0 %}
+              {% set soon_buses = departures | selectattr('scheduled_minutes_until', 'lt', 16) | list %}
+            {% endif %}
+            {{ soon_buses | length }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          departing_soon: >
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set soon_buses = departures | selectattr('estimated_minutes_until', 'lt', 16) | list %}
+              {% if soon_buses | length == 0 %}
+                {% set soon_buses = departures | selectattr('scheduled_minutes_until', 'lt', 16) | list %}
+              {% endif %}
+              {% for bus in soon_buses %}
+                Route {{ bus.line_number }} to {{ bus.destination }} ({{ bus.estimated_minutes_until or bus.scheduled_minutes_until }} min)
+                {%- if not loop.last %}, {% endif %}
+              {% endfor %}
+            {% endif %}
+        icon: mdi:clock-fast
+
+  # Peak Hour Service Indicator
+  # Shows if we're in peak service hours with more frequent buses
+  - binary_sensor:
+      - name: "Peak Hour Service"
+        state: >
+          {% set hour = now().hour %}
+          {% set weekday = now().weekday() < 5 %}
+          {{ weekday and ((hour >= 7 and hour <= 9) or (hour >= 17 and hour <= 19)) }}
+        attributes:
+          service_level: >
+            {% set hour = now().hour %}
+            {% set weekday = now().weekday() < 5 %}
+            {% if weekday and ((hour >= 7 and hour <= 9) or (hour >= 17 and hour <= 19)) %}
+              Peak Hour - Frequent Service
+            {% elif weekday and hour >= 6 and hour <= 22 %}
+              Standard Service
+            {% elif not weekday and hour >= 8 and hour <= 20 %}
+              Weekend Service
+            {% else %}
+              Limited Service
+            {% endif %}
+        icon: mdi:clock-outline
+
+  # Platform-Specific Departures
+  # Filter by platform code (useful for interchange stops)
+  - sensor:
+      - name: "Platform D3 Departures"
+        state: >
+          {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+          {% if departures %}
+            {% set d3_buses = departures | selectattr('platform_code', 'eq', 'D3') | list %}
+            {{ d3_buses | length }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          next_from_d3: >
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set d3_buses = departures | selectattr('platform_code', 'eq', 'D3') | list %}
+              {% if d3_buses %}
+                Route {{ d3_buses[0].line_number }} to {{ d3_buses[0].destination }} in {{ d3_buses[0].estimated_minutes_until or d3_buses[0].scheduled_minutes_until }} min
+              {% else %}
+                No buses from D3
+              {% endif %}
+            {% endif %}
+        icon: mdi:bus-stop
+
+  # Delayed Services Tracker
+  # Shows buses that are running more than 5 minutes late
+  - sensor:
+      - name: "Delayed Services"
+        state: >
+          {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+          {% if departures %}
+            {% set delayed = [] %}
+            {% for bus in departures %}
+              {% if bus.estimated_minutes_until and bus.scheduled_minutes_until %}
+                {% if (bus.estimated_minutes_until - bus.scheduled_minutes_until) > 5 %}
+                  {% set delayed = delayed + [bus] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ delayed | length }}
+          {% else %}
+            0
+          {% endif %}
+        attributes:
+          delayed_services: >
+            {% set departures = state_attr('sensor.hobart_interchange_next_bus_departure', 'all_departures') %}
+            {% if departures %}
+              {% set delayed = [] %}
+              {% for bus in departures %}
+                {% if bus.estimated_minutes_until and bus.scheduled_minutes_until %}
+                  {% if (bus.estimated_minutes_until - bus.scheduled_minutes_until) > 5 %}
+                    {% set delayed = delayed + ["Route " + bus.line_number + " (" + ((bus.estimated_minutes_until - bus.scheduled_minutes_until) | string) + " min late)"] %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {{ delayed | join(', ') }}
+            {% endif %}
+        icon: mdi:clock-alert
