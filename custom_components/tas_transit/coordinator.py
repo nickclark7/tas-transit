@@ -6,8 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TasTransitApi, TasTransitApiError
@@ -42,7 +41,6 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self.config_entry = config_entry
         self.api = TasTransitApi()
-        self._next_update_call = None
         self._current_interval = UPDATE_INTERVAL_DEFAULT
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -138,12 +136,7 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
 
 
     async def _schedule_next_update(self, min_time_to_departure: int | None) -> None:
-        """Schedule the next update based on departure times."""
-        # Cancel any existing scheduled update
-        if self._next_update_call:
-            self._next_update_call()
-            self._next_update_call = None
-        
+        """Adjust update interval based on departure times."""
         # Determine update interval based on closest departure
         if min_time_to_departure is not None and min_time_to_departure <= UPDATE_INTERVAL_THRESHOLD:
             # Bus within threshold - use frequent updates
@@ -162,29 +155,12 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
                 interval
             )
         
-        # Only reschedule if interval changed
+        # Update interval if changed - coordinator will handle the actual scheduling
         if interval != self._current_interval:
             self._current_interval = interval
             self.update_interval = timedelta(seconds=interval)
-            
-            # Schedule immediate update with new interval
-            self._next_update_call = async_call_later(
-                self.hass,
-                interval,
-                self._handle_refresh_interval
-            )
+            self.logger.debug("Updated coordinator interval to %d seconds", interval)
     
-    @callback
-    async def _handle_refresh_interval(self, _now) -> None:
-        """Handle the refresh interval callback."""
-        self._next_update_call = None
-        await self.async_request_refresh()
-
     async def async_shutdown(self) -> None:
         """Shutdown the coordinator."""
-        # Cancel any pending update
-        if self._next_update_call:
-            self._next_update_call()
-            self._next_update_call = None
-        
         await self.api.close()
