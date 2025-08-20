@@ -41,7 +41,11 @@ To configure this integration, you need your bus stop ID. Stop IDs consist of yo
 1. Go to Settings > Devices & Services > Add Integration
 2. Search for "Tasmanian Transport"  
 3. Enter your **Stop ID** (e.g., "7109023")
-4. The integration will automatically fetch and display the stop name for confirmation
+4. **Configure Filters (Optional)**: Filter departures by specific routes or destinations
+   - **Route Numbers**: Filter by specific bus route numbers (e.g., "X58,457,401")
+   - **Destination Filters**: Filter by final destinations shown in Tas Transport (e.g., "Mount Nelson,University")
+   - **Filter Type**: Choose to show only matching or hide matching routes/destinations
+5. The integration will automatically fetch and display the stop name for confirmation
 
 That's it! The integration will create sensors that update automatically.
 
@@ -79,6 +83,55 @@ Each sensor exposes detailed attributes with **all upcoming departures** for fle
 - **trip_id**: Unique trip identifier
 - **platform_code**: Platform/stop position (e.g., "D3")
 - **all_departures**: Array of all upcoming departures with the above details
+
+#### Filter Attributes (when filters are configured):
+- **route_filters**: List of configured route filters (e.g., ["X58", "457"])
+- **destination_filters**: List of configured destination filters (e.g., ["Mount Nelson", "University"])
+- **filter_type**: "Show only matching" or "Hide matching"
+- **active_filters**: Human-readable summary (e.g., "Routes: X58, 457 | Destinations: Mount Nelson")
+- **filters_enabled**: Boolean indicating if any filters are active
+
+## Filtering Departures
+
+The integration now supports filtering departures during setup to show only relevant routes or destinations for your specific needs.
+
+### Filter Types
+
+#### Route Number Filters
+Filter by specific bus route numbers. Supports:
+- **Exact matches**: "X58" matches route X58
+- **Partial matches**: "58" matches route X58
+- **Multiple routes**: "X58,457,401" for multiple routes
+- **Case insensitive**: "x58" matches "X58"
+
+#### Destination Filters  
+Filter by final destination as shown in the Tasmanian Transport system:
+- **Partial matches**: "Mount" matches "Mount Nelson"
+- **Multiple destinations**: "Mount Nelson,University,Sandy Bay"
+- **Case insensitive**: "university" matches "University"
+
+#### Filter Modes
+- **Include (Show only)**: Show only departures that match your filters
+- **Exclude (Hide)**: Hide departures that match your filters, show everything else
+
+### Filter Examples
+
+**Commuter Setup**: Only show express routes to the city
+- Route filters: `X58,X59,X60`
+- Filter type: Include
+
+**Avoid Certain Routes**: Show all buses except local routes
+- Route filters: `401,402,403`
+- Filter type: Exclude
+
+**Destination Specific**: Only buses going to University area
+- Destination filters: `University,Sandy Bay`
+- Filter type: Include
+
+**Combined Filtering**: Show X58 route OR any bus to Mount Nelson
+- Route filters: `X58`
+- Destination filters: `Mount Nelson`
+- Filter type: Include
 
 ## Example Automations
 

@@ -23,22 +23,39 @@
       },
       "filters": {
         "title": "Configure Filters (Optional)",
-        "description": "Filter departures to show only specific bus routes or destinations. This is optional - leave blank to show all departures from {stop_name}.\n\n**Examples:**\n- Line filters: X58,457,401\n- Destination filters: Mount Nelson,University,Sandy Bay\n\n{examples}",
+        "description": "Filter departures to show only specific bus routes or destinations. This is optional - leave blank to show all departures from {stop_name}.\n\n**Examples:**\n- Route filters: X58,457,401\n- Destination filters: Mount Nelson,University,Sandy Bay\n\n{examples}",
         "data": {
-          "line_filters": "Line Numbers (comma-separated)",
-          "destination_filters": "Destinations (comma-separated)",
-          "filter_mode": "Filter Mode"
+          "line_filters": "Route Numbers",
+          "destination_filters": "Destination Filters",
+          "filter_mode": "Filter Type"
         },
         "data_description": {
-          "line_filters": "Specific route numbers to include/exclude (e.g., X58,457)",
-          "destination_filters": "Specific destinations to include/exclude (e.g., Mount Nelson,University)",
-          "filter_mode": "Include only matching or exclude matching"
+          "line_filters": "Filter by specific bus route numbers, separated by commas (e.g., X58,457,401)",
+          "destination_filters": "Filter by the final destination which is displayed in Tas Transport (e.g., Mount Nelson,University)",
+          "filter_mode": "Show only matching routes/destinations (Include) or hide matching ones (Exclude)"
         }
       }
     },
     "error": {
       "stop_not_found": "Stop ID not found. Please check the ID and try again.",
       "unknown": "An unexpected error occurred. Please try again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "filter_mode": "Filter Type"
+        }
+      }
+    }
+  },
+  "selector": {
+    "filter_mode": {
+      "options": {
+        "include": "Show Only (Include matching routes/destinations)",
+        "exclude": "Hide (Exclude matching routes/destinations)"
+      }
     }
   }
 }

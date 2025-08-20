@@ -109,11 +109,26 @@ class TasTransitSensorBase(CoordinatorEntity, SensorEntity):
         filter_mode = stop_config.get(CONF_FILTER_MODE)
         
         if line_filters:
-            attributes["line_filters"] = line_filters
+            attributes["route_filters"] = line_filters
+            attributes["route_filters_active"] = True
         if destination_filters:
             attributes["destination_filters"] = destination_filters
+            attributes["destination_filters_active"] = True
         if filter_mode:
-            attributes["filter_mode"] = filter_mode
+            attributes["filter_type"] = "Show only matching" if filter_mode == "include" else "Hide matching"
+            
+        # Add summary of active filters
+        active_filters = []
+        if line_filters:
+            active_filters.append(f"Routes: {', '.join(line_filters)}")
+        if destination_filters:
+            active_filters.append(f"Destinations: {', '.join(destination_filters)}")
+        
+        if active_filters:
+            attributes["active_filters"] = " | ".join(active_filters)
+            attributes["filters_enabled"] = True
+        else:
+            attributes["filters_enabled"] = False
             
         return attributes
 
