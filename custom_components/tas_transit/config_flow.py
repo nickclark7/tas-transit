@@ -13,18 +13,9 @@ from homeassistant.helpers import config_validation as cv
 
 from .api import TasTransitApi
 from .const import (
-    CONF_DEPARTURE_REMINDER,
-    CONF_EARLY_THRESHOLD,
-    CONF_LATE_THRESHOLD,
-    CONF_SCHEDULED_DEPARTURE_TIME,
     CONF_STOP_ID,
     CONF_STOP_NAME,
     CONF_STOPS,
-    CONF_TIME_TO_GET_THERE,
-    DEFAULT_DEPARTURE_REMINDER,
-    DEFAULT_EARLY_THRESHOLD,
-    DEFAULT_LATE_THRESHOLD,
-    DEFAULT_TIME_TO_GET_THERE,
     DOMAIN,
     TRANSPORT_WEB_URL,
 )
@@ -34,11 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_STOP_ID, description={"suggested_value": "7109023"}): str,
-        vol.Required(CONF_SCHEDULED_DEPARTURE_TIME): str,
-        vol.Optional(CONF_TIME_TO_GET_THERE, default=DEFAULT_TIME_TO_GET_THERE): cv.positive_int,
-        vol.Optional(CONF_EARLY_THRESHOLD, default=DEFAULT_EARLY_THRESHOLD): cv.positive_int,
-        vol.Optional(CONF_LATE_THRESHOLD, default=DEFAULT_LATE_THRESHOLD): cv.positive_int,
-        vol.Optional(CONF_DEPARTURE_REMINDER, default=DEFAULT_DEPARTURE_REMINDER): cv.positive_int,
     }
 )
 
@@ -54,8 +40,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors: dict[str, str] = {}
         description_placeholders = {
+            "transport_site_url": TRANSPORT_WEB_URL,
             "stop_finder_url": TRANSPORT_WEB_URL + "7109023",
-            "instructions": "To find your stop ID, visit the Tasmanian Transport website, search for your stop, and copy the ID from the URL (e.g., 7109023 from .../#?stop=7109023)",
+            "instructions": "Stop IDs consist of your postcode followed by three digits (e.g., 7109023 for postcode 7109). To find your stop ID, visit the Tasmanian Transport website, search for your stop, and copy the ID from the URL.",
         }
 
         if user_input is not None:
@@ -67,37 +54,24 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not stop_info:
                     errors[CONF_STOP_ID] = "stop_not_found"
                 else:
-                    # Validate departure time format
-                    try:
-                        self._validate_time_format(user_input[CONF_SCHEDULED_DEPARTURE_TIME])
-                    except ValueError:
-                        errors[CONF_SCHEDULED_DEPARTURE_TIME] = "invalid_time_format"
+                    # Extract stop name from the API response
+                    stop_name = "Unknown Stop"
+                    if "stop" in stop_info and "name" in stop_info["stop"]:
+                        stop_name = stop_info["stop"]["name"]
+                    elif "name" in stop_info:
+                        stop_name = stop_info["name"]
+                    else:
+                        stop_name = f"Stop {user_input[CONF_STOP_ID]}"
                     
-                    if not errors:
-                        # Extract stop name from the API response
-                        # The API returns stop info in stop_info["stop"]["name"]
-                        stop_name = "Unknown Stop"
-                        if "stop" in stop_info and "name" in stop_info["stop"]:
-                            stop_name = stop_info["stop"]["name"]
-                        elif "name" in stop_info:
-                            stop_name = stop_info["name"]
-                        else:
-                            stop_name = f"Stop {user_input[CONF_STOP_ID]}"
-                        
-                        return self.async_create_entry(
-                            title=f"Bus from {stop_name}",
-                            data={
-                                CONF_STOPS: [{
-                                    CONF_STOP_ID: user_input[CONF_STOP_ID],
-                                    CONF_STOP_NAME: stop_name,
-                                    CONF_SCHEDULED_DEPARTURE_TIME: user_input[CONF_SCHEDULED_DEPARTURE_TIME],
-                                    CONF_TIME_TO_GET_THERE: user_input[CONF_TIME_TO_GET_THERE],
-                                    CONF_EARLY_THRESHOLD: user_input[CONF_EARLY_THRESHOLD],
-                                    CONF_LATE_THRESHOLD: user_input[CONF_LATE_THRESHOLD],
-                                    CONF_DEPARTURE_REMINDER: user_input[CONF_DEPARTURE_REMINDER],
-                                }],
-                            },
-                        )
+                    return self.async_create_entry(
+                        title=f"Bus from {stop_name}",
+                        data={
+                            CONF_STOPS: [{
+                                CONF_STOP_ID: user_input[CONF_STOP_ID],
+                                CONF_STOP_NAME: stop_name,
+                            }],
+                        },
+                    )
 
             except Exception as exception:
                 _LOGGER.exception("Unexpected exception: %s", exception)
@@ -116,8 +90,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle adding an additional stop."""
         errors: dict[str, str] = {}
         description_placeholders = {
+            "transport_site_url": TRANSPORT_WEB_URL,
             "stop_finder_url": TRANSPORT_WEB_URL + "7109023",
-            "instructions": "To find your stop ID, visit the Tasmanian Transport website, search for your stop, and copy the ID from the URL (e.g., 7109023 from .../#?stop=7109023)",
+            "instructions": "Stop IDs consist of your postcode followed by three digits (e.g., 7109023 for postcode 7109). To find your stop ID, visit the Tasmanian Transport website, search for your stop, and copy the ID from the URL.",
         }
 
         if user_input is not None:
@@ -129,41 +104,36 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not stop_info:
                     errors[CONF_STOP_ID] = "stop_not_found"
                 else:
-                    # Validate departure time format
-                    try:
-                        self._validate_time_format(user_input[CONF_SCHEDULED_DEPARTURE_TIME])
-                    except ValueError:
-                        errors[CONF_SCHEDULED_DEPARTURE_TIME] = "invalid_time_format"
+                    # Get existing config data
+                    existing_config = self.hass.config_entries.async_entries(DOMAIN)[0]
+                    existing_data = dict(existing_config.data)
                     
-                    if not errors:
-                        # Get existing config data
-                        existing_config = self.hass.config_entries.async_entries(DOMAIN)[0]
-                        existing_data = dict(existing_config.data)
-                        
-                        # Add new stop to existing stops
-                        stop_name = stop_info.get("name", f"Stop {user_input[CONF_STOP_ID]}")
-                        new_stop = {
-                            CONF_STOP_ID: user_input[CONF_STOP_ID],
-                            CONF_STOP_NAME: stop_name,
-                            CONF_SCHEDULED_DEPARTURE_TIME: user_input[CONF_SCHEDULED_DEPARTURE_TIME],
-                            CONF_TIME_TO_GET_THERE: user_input[CONF_TIME_TO_GET_THERE],
-                            CONF_EARLY_THRESHOLD: user_input[CONF_EARLY_THRESHOLD],
-                            CONF_LATE_THRESHOLD: user_input[CONF_LATE_THRESHOLD],
-                            CONF_DEPARTURE_REMINDER: user_input[CONF_DEPARTURE_REMINDER],
-                        }
-                        
-                        existing_data[CONF_STOPS].append(new_stop)
-                        
-                        # Update the config entry
-                        self.hass.config_entries.async_update_entry(
-                            existing_config,
-                            data=existing_data,
-                        )
-                        
-                        return self.async_create_entry(
-                            title=f"Added stop: {stop_name}",
-                            data=existing_data,
-                        )
+                    # Extract stop name from the API response  
+                    stop_name = "Unknown Stop"
+                    if "stop" in stop_info and "name" in stop_info["stop"]:
+                        stop_name = stop_info["stop"]["name"]
+                    elif "name" in stop_info:
+                        stop_name = stop_info["name"]
+                    else:
+                        stop_name = f"Stop {user_input[CONF_STOP_ID]}"
+                    
+                    new_stop = {
+                        CONF_STOP_ID: user_input[CONF_STOP_ID],
+                        CONF_STOP_NAME: stop_name,
+                    }
+                    
+                    existing_data[CONF_STOPS].append(new_stop)
+                    
+                    # Update the config entry
+                    self.hass.config_entries.async_update_entry(
+                        existing_config,
+                        data=existing_data,
+                    )
+                    
+                    return self.async_create_entry(
+                        title=f"Added stop: {stop_name}",
+                        data=existing_data,
+                    )
 
             except Exception as exception:
                 _LOGGER.exception("Unexpected exception: %s", exception)
@@ -176,18 +146,3 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders=description_placeholders,
         )
 
-    def _validate_time_format(self, time_str: str) -> None:
-        """Validate time format (HH:MM)."""
-        try:
-            parts = time_str.split(":")
-            if len(parts) != 2:
-                raise ValueError("Invalid time format")
-            
-            hours = int(parts[0])
-            minutes = int(parts[1])
-            
-            if not (0 <= hours <= 23) or not (0 <= minutes <= 59):
-                raise ValueError("Invalid time range")
-                
-        except (ValueError, IndexError) as err:
-            raise ValueError("Invalid time format") from err

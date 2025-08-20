@@ -3,48 +3,27 @@
     "step": {
       "user": {
         "title": "Set up Tasmanian Transport",
-        "description": "Configure your bus stop for real-time departure tracking.\n\n**To find your stop ID:**\n1. Visit [Tasmanian Transport website]({stop_finder_url})\n2. Search for your bus stop\n3. Copy the ID from the URL (e.g., 7109023 from .../#?stop=7109023)",
+        "description": "Configure your bus stop for real-time departure tracking.\n\n**About Stop IDs:**\nStop IDs consist of your postcode followed by three digits (e.g., 7109023 for postcode 7109).\n\n**To find your stop ID:**\n1. Visit the [Tasmanian Transport website]({transport_site_url})\n2. Search for your bus stop\n3. Copy the ID from the URL\n\n**Example:** For stop 7109023, you'll see it in the URL like: .../#?stop=7109023",
         "data": {
-          "stop_id": "Stop ID",
-          "scheduled_departure_time": "Scheduled Departure Time (HH:MM)",
-          "time_to_get_there": "Time to Get There (minutes)",
-          "early_threshold": "Early Threshold (minutes)",
-          "late_threshold": "Late Threshold (minutes)",
-          "departure_reminder": "Departure Reminder (minutes before)"
+          "stop_id": "Stop ID"
         },
         "data_description": {
-          "stop_id": "The unique ID of your bus stop (e.g., 7109023)",
-          "scheduled_departure_time": "Your usual bus departure time in 24-hour format (e.g., 08:13)",
-          "time_to_get_there": "How many minutes it takes you to walk to the bus stop",
-          "early_threshold": "How many minutes early is considered 'early' for notifications",
-          "late_threshold": "How many minutes late is considered 'late' for notifications",
-          "departure_reminder": "How many minutes before departure to remind you to leave"
+          "stop_id": "Your postcode + 3 digits (e.g., 7109023 for postcode 7109)"
         }
       },
       "add_stop": {
         "title": "Add Another Bus Stop",
-        "description": "Add another bus stop to track multiple routes.\n\n**To find your stop ID:**\n1. Visit [Tasmanian Transport website]({stop_finder_url})\n2. Search for your bus stop\n3. Copy the ID from the URL (e.g., 7109023 from .../#?stop=7109023)",
+        "description": "Add another bus stop to track multiple routes.\n\n**About Stop IDs:**\nStop IDs consist of your postcode followed by three digits (e.g., 7109023 for postcode 7109).\n\n**To find your stop ID:**\n1. Visit the [Tasmanian Transport website]({transport_site_url})\n2. Search for your bus stop\n3. Copy the ID from the URL\n\n**Example:** For stop 7109023, you'll see it in the URL like: .../#?stop=7109023",
         "data": {
-          "stop_id": "Stop ID",
-          "scheduled_departure_time": "Scheduled Departure Time (HH:MM)",
-          "time_to_get_there": "Time to Get There (minutes)",
-          "early_threshold": "Early Threshold (minutes)",
-          "late_threshold": "Late Threshold (minutes)",
-          "departure_reminder": "Departure Reminder (minutes before)"
+          "stop_id": "Stop ID"
         },
         "data_description": {
-          "stop_id": "The unique ID of your bus stop (e.g., 7109023)",
-          "scheduled_departure_time": "Your usual bus departure time in 24-hour format (e.g., 08:13)",
-          "time_to_get_there": "How many minutes it takes you to walk to the bus stop",
-          "early_threshold": "How many minutes early is considered 'early' for notifications",
-          "late_threshold": "How many minutes late is considered 'late' for notifications",
-          "departure_reminder": "How many minutes before departure to remind you to leave"
+          "stop_id": "Your postcode + 3 digits (e.g., 7109023 for postcode 7109)"
         }
       }
     },
     "error": {
       "stop_not_found": "Stop ID not found. Please check the ID and try again.",
-      "invalid_time_format": "Invalid time format. Please use HH:MM format (e.g., 08:13).",
       "unknown": "An unexpected error occurred. Please try again."
     }
   }

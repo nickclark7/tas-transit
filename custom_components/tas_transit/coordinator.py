@@ -12,14 +12,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .api import TasTransitApi, TasTransitApiError
 from .const import (
-    BUS_STATUS_CANCELLED,
-    BUS_STATUS_EARLY,
-    BUS_STATUS_LATE,
-    BUS_STATUS_ON_TIME,
-    BUS_STATUS_UNKNOWN,
-    CONF_EARLY_THRESHOLD,
-    CONF_LATE_THRESHOLD,
-    CONF_SCHEDULED_DEPARTURE_TIME,
     CONF_STOP_ID,
     CONF_STOPS,
     UPDATE_INTERVAL_DEFAULT,
@@ -65,7 +57,7 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
                 departures = await self.api.get_stop_departures(stop_id)
                 
                 # Process the departures data for this stop
-                processed_data = self._process_departures(departures, stop_config)
+                processed_data = self._process_departures(departures)
                 stops_data[stop_id] = processed_data
                 
                 # Track the earliest departure across all stops
@@ -82,19 +74,30 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
         except TasTransitApiError as err:
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
-    def _process_departures(self, departures: list[dict[str, Any]], stop_config: dict[str, Any]) -> dict[str, Any]:
-        """Process departure data and calculate bus status."""
+    def _process_departures(self, departures: list[dict[str, Any]]) -> dict[str, Any]:
+        """Process departure data."""
         now = datetime.now()
         
-        # Filter departures to only include upcoming ones
+        # Filter departures to only include upcoming ones (non-cancelled, positive minutes)
         upcoming_departures = []
         for departure in departures:
-            scheduled_time = self._get_scheduled_time(departure)
-            if scheduled_time and scheduled_time > now:
+            # Use estimated minutes if available, otherwise scheduled minutes
+            minutes_until = departure.get("estimatedMinutesUntilDeparture")
+            if minutes_until is None:
+                minutes_until = departure.get("scheduledMinutesUntilDeparture")
+            
+            # Include if not cancelled and has future departure time
+            if not departure.get("cancelled", False) and minutes_until is not None and minutes_until >= 0:
                 upcoming_departures.append(departure)
         
-        # Sort by scheduled departure time
-        upcoming_departures.sort(key=lambda x: self._get_scheduled_time(x) or datetime.max)
+        # Sort by minutes until departure (estimated or scheduled)
+        def sort_key(dep):
+            est_min = dep.get("estimatedMinutesUntilDeparture")
+            if est_min is not None:
+                return est_min
+            return dep.get("scheduledMinutesUntilDeparture", 999999)
+        
+        upcoming_departures.sort(key=sort_key)
         
         # Get the next departure
         next_departure = upcoming_departures[0] if upcoming_departures else None
@@ -102,91 +105,37 @@ class TasTransitDataUpdateCoordinator(DataUpdateCoordinator):
         if not next_departure:
             return {
                 "next_departure": None,
-                "bus_status": BUS_STATUS_UNKNOWN,
                 "time_to_departure": None,
                 "departures": [],
                 "last_updated": now,
-                "stop_config": stop_config,
             }
         
-        # Calculate bus status
-        bus_status = self._calculate_bus_status(next_departure, stop_config)
-        
-        # Calculate time to departure
-        scheduled_time = self._get_scheduled_time(next_departure)
-        time_to_departure = None
-        if scheduled_time:
-            time_to_departure = int((scheduled_time - now).total_seconds() / 60)
+        # Get time to departure (prefer estimated over scheduled)
+        time_to_departure = next_departure.get("estimatedMinutesUntilDeparture")
+        if time_to_departure is None:
+            time_to_departure = next_departure.get("scheduledMinutesUntilDeparture")
         
         return {
             "next_departure": next_departure,
-            "bus_status": bus_status,
             "time_to_departure": time_to_departure,
-            "departures": upcoming_departures[:5],  # Keep top 5 departures
+            "departures": upcoming_departures,  # Expose all departures for user filtering
             "last_updated": now,
-            "stop_config": stop_config,
         }
 
     def _get_scheduled_time(self, departure: dict[str, Any]) -> datetime | None:
         """Extract scheduled departure time from departure data."""
-        # The stopdisplays API uses specific field names
-        time_fields = [
-            "scheduledArrivalTime",
-            "scheduledDepartureTime",
-            "departureTime",
-            "arrivalTime",
-        ]
-        
-        for field in time_fields:
-            if field in departure and departure[field]:
-                return self.api.parse_departure_time(departure[field])
-        
+        scheduled_time = departure.get("scheduledDepartureTime")
+        if scheduled_time:
+            return self.api.parse_departure_time(scheduled_time)
         return None
 
     def _get_estimated_time(self, departure: dict[str, Any]) -> datetime | None:
         """Extract estimated departure time from departure data."""
-        # The stopdisplays API uses specific field names
-        time_fields = [
-            "estimatedDepartureTime",
-            "estimatedArrivalTime",
-            "realTimeDepartureTime",
-            "realTimeArrivalTime",
-        ]
-        
-        for field in time_fields:
-            if field in departure and departure[field]:
-                return self.api.parse_departure_time(departure[field])
-        
+        estimated_time = departure.get("estimatedDepartureTime")
+        if estimated_time:
+            return self.api.parse_departure_time(estimated_time)
         return None
 
-    def _calculate_bus_status(self, departure: dict[str, Any], stop_config: dict[str, Any]) -> str:
-        """Calculate bus status based on scheduled vs estimated time."""
-        scheduled_time = self._get_scheduled_time(departure)
-        estimated_time = self._get_estimated_time(departure)
-        
-        if not scheduled_time:
-            return BUS_STATUS_UNKNOWN
-        
-        # Check if bus is cancelled
-        if "cancelled" in departure and departure["cancelled"]:
-            return BUS_STATUS_CANCELLED
-        
-        # If no estimated time, assume on time
-        if not estimated_time:
-            return BUS_STATUS_ON_TIME
-        
-        # Calculate difference in minutes
-        diff_minutes = (estimated_time - scheduled_time).total_seconds() / 60
-        
-        early_threshold = stop_config[CONF_EARLY_THRESHOLD]
-        late_threshold = stop_config[CONF_LATE_THRESHOLD]
-        
-        if diff_minutes < -early_threshold:
-            return BUS_STATUS_EARLY
-        elif diff_minutes > late_threshold:
-            return BUS_STATUS_LATE
-        else:
-            return BUS_STATUS_ON_TIME
 
     async def _schedule_next_update(self, min_time_to_departure: int | None) -> None:
         """Schedule the next update based on departure times."""

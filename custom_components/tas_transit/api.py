@@ -115,10 +115,32 @@ class TasTransitApi:
                     response.raise_for_status()
                     data = await response.json()
                     
-                    # Extract departures from the stopdisplays response
+                    # Extract and flatten departures from nextStopVisits
                     departures = []
-                    if isinstance(data, dict) and "departures" in data:
-                        departures = data["departures"]
+                    if isinstance(data, dict) and "nextStopVisits" in data:
+                        for route_group in data["nextStopVisits"]:
+                            direction = route_group.get("directionOfLine", {})
+                            line_number = direction.get("lineNumber", "Unknown")
+                            destination = direction.get("destinationName", "Unknown")
+                            
+                            for visit in route_group.get("stopVisits", []):
+                                # Create a flattened departure object
+                                departure = {
+                                    "lineNumber": line_number,
+                                    "destinationName": destination,
+                                    "scheduledDepartureTime": visit.get("scheduledDepartureTime"),
+                                    "estimatedDepartureTime": visit.get("estimatedDepartureTime"),
+                                    "scheduledMinutesUntilDeparture": visit.get("scheduledMinutesUntilDeparture"),
+                                    "estimatedMinutesUntilDeparture": visit.get("estimatedMinutesUntilDeparture"),
+                                    "cancelled": visit.get("departureCancelled", False),
+                                    "tripId": visit.get("tripId"),
+                                    "platformCode": visit.get("platformCode"),
+                                    "stopName": visit.get("stopName"),
+                                }
+                                departures.append(departure)
+                    
+                    # Sort by scheduled departure time
+                    departures.sort(key=lambda x: x.get("scheduledDepartureTime") or 0)
                     
                     return departures
 
@@ -129,36 +151,49 @@ class TasTransitApi:
         except Exception as err:
             raise TasTransitApiError(f"Unexpected error: {err}") from err
 
-    def parse_departure_time(self, time_str: str) -> datetime | None:
-        """Parse departure time string to datetime object."""
-        if not time_str:
+    def parse_departure_time(self, time_value: str | int | None) -> datetime | None:
+        """Parse departure time (Unix timestamp or string) to datetime object."""
+        if time_value is None:
             return None
         
         try:
-            # Try different time formats that might be used by the API
-            formats = [
-                "%Y-%m-%dT%H:%M:%S",
-                "%Y-%m-%dT%H:%M:%S.%f",
-                "%Y-%m-%dT%H:%M:%SZ",
-                "%Y-%m-%dT%H:%M:%S.%fZ",
-                "%H:%M:%S",
-                "%H:%M",
-            ]
+            # Handle Unix timestamp (milliseconds)
+            if isinstance(time_value, int):
+                return datetime.fromtimestamp(time_value / 1000.0)
             
-            for fmt in formats:
+            # Handle string timestamps
+            if isinstance(time_value, str):
+                # Try to parse as integer first (Unix timestamp as string)
                 try:
-                    if "T" in time_str:
-                        return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
-                    else:
-                        # For time-only strings, use today's date
-                        time_obj = datetime.strptime(time_str, fmt).time()
-                        return datetime.combine(datetime.now().date(), time_obj)
+                    timestamp = int(time_value)
+                    return datetime.fromtimestamp(timestamp / 1000.0)
                 except ValueError:
-                    continue
+                    pass
+                
+                # Try different time formats for ISO strings
+                formats = [
+                    "%Y-%m-%dT%H:%M:%S",
+                    "%Y-%m-%dT%H:%M:%S.%f",
+                    "%Y-%m-%dT%H:%M:%SZ",
+                    "%Y-%m-%dT%H:%M:%S.%fZ",
+                    "%H:%M:%S",
+                    "%H:%M",
+                ]
+                
+                for fmt in formats:
+                    try:
+                        if "T" in time_value:
+                            return datetime.fromisoformat(time_value.replace("Z", "+00:00"))
+                        else:
+                            # For time-only strings, use today's date
+                            time_obj = datetime.strptime(time_value, fmt).time()
+                            return datetime.combine(datetime.now().date(), time_obj)
+                    except ValueError:
+                        continue
             
-            _LOGGER.warning("Could not parse time string: %s", time_str)
+            _LOGGER.warning("Could not parse time value: %s", time_value)
             return None
             
         except Exception as err:
-            _LOGGER.warning("Error parsing time string '%s': %s", time_str, err)
+            _LOGGER.warning("Error parsing time value '%s': %s", time_value, err)
             return None

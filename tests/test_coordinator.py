@@ -10,12 +10,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from custom_components.tas_transit.const import (
-    CONF_EARLY_THRESHOLD,
-    CONF_LATE_THRESHOLD,
     CONF_STOP_ID,
     CONF_STOP_NAME,
     CONF_STOPS,
-    CONF_TIME_TO_GET_THERE,
     UPDATE_INTERVAL_DEFAULT,
     UPDATE_INTERVAL_FREQUENT,
     UPDATE_INTERVAL_THRESHOLD,
@@ -34,9 +31,6 @@ def mock_config_entry():
                 {
                     CONF_STOP_ID: "7109023",
                     CONF_STOP_NAME: "Test Stop",
-                    CONF_TIME_TO_GET_THERE: 5,
-                    CONF_EARLY_THRESHOLD: 2,
-                    CONF_LATE_THRESHOLD: 5,
                 }
             ]
         },
